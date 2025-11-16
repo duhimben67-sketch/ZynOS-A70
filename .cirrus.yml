@@ -1,0 +1,34 @@
+task:
+  name: "LineageOS 21 Build"
+  timeout_in: 8h
+
+  container:
+    image: lineageos4microg/docker-lineage-cicd:latest
+    cpu: 8
+    memory: 32G
+
+  env:
+    JAVA_TOOL_OPTIONS: "-Xmx16g"
+    CCACHE_COMPRESS: "1"
+    CCACHE_SIZE: "50G"
+
+  ccache_cache:
+    folder: ~/.ccache
+
+  setup_script:
+    - git config --global user.name "builder"
+    - git config --global user.email "builder@cirrus-ci.com"
+    - mkdir -p ~/android/lineage
+    - cd ~/android/lineage
+    - repo init -u https://github.com/LineageOS/android.git -b lineage-21.0
+    - repo sync -j8
+
+  build_script:
+    - cd ~/android/lineage
+    - source build/envsetup.sh
+    - lunch lineage_a70q-userdebug
+    - mka bacon -j8
+
+  artifacts:
+    output:
+      path: ~/android/lineage/out/target/product/**/lineage-*.zip
