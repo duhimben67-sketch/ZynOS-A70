@@ -1,0 +1,11 @@
+<manifest>
+  <!-- Replace youruser with your GitHub username if you forked -->
+  <project name="youruser/android_device_samsung_a70q" path="device/samsung/a70q" />
+  <project name="youruser/android_kernel_samsung_sm6150" path="kernel/samsung/sm6150" />
+  <project name="youruser/proprietary_vendor_samsung_a70q" path="vendor/samsung_a70q" />
+
+  <!-- public fallbacks -->
+  <project name="rtd1250/android_device_samsung_a70q" path="device/samsung/a70q_rtd1250" />
+  <project name="a70q-lineage/android_kernel_samsung_sm6150" path="kernel/samsung/sm6150_a70qlineage" />
+  <project name="Exynos7885/proprietary_vendor_samsung_a70q" path="vendor/samsung_a70q_ex7885" />
+</manifest>
