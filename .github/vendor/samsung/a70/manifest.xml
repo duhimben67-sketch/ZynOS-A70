@@ -1,0 +1,11 @@
+<manifest version="1.0" type="device">
+    <hal format="hidl">
+        <name>android.hardware.graphics.allocator</name>
+        <version>2.0</version>
+        <transport>hwbinder</transport>
+        <interface>
+            <name>IAllocator</name>
+            <instance>default</instance>
+        </interface>
+    </hal>
+</manifest>
