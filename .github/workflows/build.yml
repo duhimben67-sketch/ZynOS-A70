@@ -1,111 +1,62 @@
-name: ZynOS (LineageOS 21) - A70q (rclone -> Google Drive)
+name: LineageOS 21 - A70q Build
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 720
 
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v4
+      - name: Checkout ROM source
+        uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git \
-          libncurses5-dev libssl-dev libxml2-utils python3 python-is-python3 rsync unzip zip zlib1g-dev repo openjdk-17-jdk p7zip-full
+      - name: Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y bc bison build-essential ccache curl flex g++ g++-multilib \
+            gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev \
+            lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev \
+            libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools \
+            xsltproc zip zlib1g-dev libncurses5 python-is-python3 python3
 
-    - name: Create workspace
-      run: |
-        mkdir -p workspace
-        cd workspace
-        git config --global user.name "ZynOS Builder"
-        git config --global user.email "builder@example.com"
+      - name: Set up Repo tool
+        run: |
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
 
-    - name: Init LineageOS 21 shallow
-      run: |
-        cd workspace
-        repo init -u https://github.com/LineageOS/android.git -b lineage-21.0 --depth=1
+      - name: Setup ccache
+        run: |
+          export CCACHE_DIR=$HOME/.ccache
+          ccache -M 20G
+          echo "export USE_CCACHE=1" >> ~/.bashrc
+          echo "export CCACHE_EXEC=/usr/bin/ccache" >> ~/.bashrc
 
-    - name: Copy local_manifests (if provided)
-      run: |
-        cp -r ../.repo/local_manifests workspace/.repo/local_manifests || true
+      - name: Initialize LineageOS 21 repo
+        run: |
+          repo init -u https://github.com/LineageOS/android.git -b lineage-21.0
 
-    - name: Optimized repo sync
-      run: |
-        cd workspace
-        repo sync -c --no-clone-bundle --no-tags --optimized-fetch --prune -j8 || repo sync -c -j4
+      - name: Sync sources (takes time)
+        run: |
+          repo sync -j$(nproc) --force-sync --no-tags --no-clone-bundle
 
-    - name: Add device/kernel/vendor for A70 (explicit clones)
-      run: |
-        cd workspace
-        # if you forked, replace youruser/ below (we will try your forks first)
-        git clone --depth=1 https://github.com/youruser/android_device_samsung_a70q device/samsung/a70q || true
-        git clone --depth=1 https://github.com/youruser/android_kernel_samsung_sm6150 kernel/samsung/sm6150 || true
-        git clone --depth=1 https://github.com/youruser/proprietary_vendor_samsung_a70q vendor/samsung_a70q || true
-        # fallback public repos
-        git clone --depth=1 https://github.com/rtd1250/android_device_samsung_a70q device/samsung/a70q_rtd1250 || true
-        git clone --depth=1 https://github.com/a70q-lineage/android_kernel_samsung_sm6150 kernel/samsung/sm6150_a70qlineage || true
-        git clone --depth=1 https://github.com/Exynos7885/proprietary_vendor_samsung_a70q vendor/samsung_a70q_ex7885 || true
+      - name: Clone A70 device sources
+        run: |
+          git clone https://github.com/LineageOS/android_device_samsung_a70q -b lineage-21.0 device/samsung/a70q
+          git clone https://github.com/LineageOS/android_kernel_samsung_sm6150 -b lineage-21.0 kernel/samsung/sm6150
+          git clone https://github.com/TheMuppets/proprietary_vendor_samsung -b lineage-21.0 vendor/samsung
 
-    - name: Configure ccache
-      run: |
-        mkdir -p /tmp/ccache
-        echo "CCACHE_DIR=/tmp/ccache" >> $GITHUB_ENV
-        echo "USE_CCACHE=1" >> $GITHUB_ENV
-        ccache -M 50G || true
+      - name: Build LineageOS 21
+        run: |
+          source build/envsetup.sh
+          lunch lineage_a70q-userdebug
+          m bacon -j$(nproc)
 
-    - name: Build ZynOS (LineageOS 21)
-      env:
-        DEVICE: a70q
-        LUNCH: lineage_a70q-userdebug
-        JOBS: 8
-      run: |
-        cd workspace
-        source build/envsetup.sh
-        # Try make flow for Lineage
-        lunch $LUNCH || true
-        mka bacon -j${JOBS} || true
-
-    - name: Install rclone
-      run: |
-        curl https://rclone.org/install.sh | sudo bash
-
-    - name: Create rclone config (from secrets)
-      env:
-        GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
-        GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
-        GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
-      run: |
-        mkdir -p ~/.config/rclone
-        cat > ~/.config/rclone/rclone.conf <<'EOF'
-[ZynOS-Rclone]
-type = drive
-client_id = ${GDRIVE_CLIENT_ID}
-client_secret = ${GDRIVE_CLIENT_SECRET}
-token = {"access_token":"","token_type":"Bearer","refresh_token":"${GDRIVE_REFRESH_TOKEN}","expiry":"0001-01-01T00:00:00Z"}
-EOF
-        chmod 600 ~/.config/rclone/rclone.conf
-
-    - name: Upload builds to Google Drive
-      run: |
-        set -e
-        mkdir -p out_to_upload || true
-        if [ -d workspace/out/target/product/a70q ]; then
-          cp workspace/out/target/product/a70q/*.zip out_to_upload/ 2>/dev/null || true
-          cp workspace/out/target/product/a70q/*.img out_to_upload/ 2>/dev/null || true
-        fi
-        rclone mkdir ZynOS-Rclone:"ZynOS" || true
-        rclone copy out_to_upload ZynOS-Rclone:"ZynOS/" --drive-chunk-size 64M -P || true
-        rm -rf workspace || true
-
-    - name: Upload small artifacts to GitHub
-      uses: actions/upload-artifact@v4
-      with:
-        name: zynos-build-logs
-        path: |
-          workspace/out/target/product/a70q/*.zip
-          workspace/out/target/product/a70q/*.img
+      - name: Upload ROM Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lineage-21-a70q
+          path: out/target/product/a70q/*.zip
