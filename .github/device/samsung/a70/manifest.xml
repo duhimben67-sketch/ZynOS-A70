@@ -1,0 +1,4 @@
+<manifest>
+    <project name="LineageOS/android_device_samsung_a70" path="device/samsung/a70" remote="github" />
+    <project name="LineageOS/android_device_samsung_sm6150-common" path="device/samsung/sm6150-common" remote="github" />
+</manifest>
